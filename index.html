@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>환승 시간표</title>
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- iOS 홈 화면 앱 -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="환승시간표" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="appbar">
+    <span class="ic" style="font-size:20px">🚆</span>
+    <span class="title" id="appTitle">환승 시간표</span>
+    <span class="spacer"></span>
+    <button class="btn ghost sm" id="btnInstallHint" title="설치 안내">설치</button>
+  </div>
+
+  <!-- 환승 검색 -->
+  <section class="view" id="view-search" data-view="search"></section>
+  <!-- 경로 -->
+  <section class="view" id="view-routes" data-view="routes" hidden></section>
+  <!-- 시간표(관리) -->
+  <section class="view" id="view-templates" data-view="templates" hidden></section>
+  <!-- 데이터 -->
+  <section class="view" id="view-data" data-view="data" hidden></section>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="search" class="active"><span class="ic">🔎</span>환승검색</button>
+    <button data-tab="routes"><span class="ic">🧭</span>경로</button>
+    <button data-tab="templates"><span class="ic">🕒</span>시간표</button>
+    <button data-tab="data"><span class="ic">💾</span>데이터</button>
+  </nav>
+
+  <!-- 범용 모달 -->
+  <div class="modal-back" id="modalBack" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <div class="grab"></div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW 등록 실패', e));
+      });
+    }
+  </script>
+</body>
+</html>

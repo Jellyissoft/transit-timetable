@@ -1,0 +1,10 @@
+# Python 아이콘 생성 부산물
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
