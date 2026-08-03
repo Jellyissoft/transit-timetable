@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-  <title>환승 시간표</title>
-  <meta name="theme-color" content="#2563eb" />
+  <title>춘천 가는 길 🐾</title>
+  <meta name="theme-color" content="#bfe0ff" />
   <link rel="manifest" href="manifest.webmanifest" />
   <!-- iOS 홈 화면 앱 -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="환승시간표" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="춘천가는길" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="appbar">
-    <span class="ic" style="font-size:20px">🚆</span>
-    <span class="title" id="appTitle">환승 시간표</span>
+    <span class="mascot-mini" id="mascotMini" aria-hidden="true"></span>
+    <span class="title" id="appTitle">춘천 가는 길</span>
     <span class="spacer"></span>
-    <button class="btn ghost sm" id="btnInstallHint" title="설치 안내">설치</button>
+    <button class="btn ghost sm" id="btnInstallHint" title="설치 안내">📲 설치</button>
   </div>
 
   <!-- 환승 검색 -->
@@ -35,7 +35,7 @@
     <button data-tab="search" class="active"><span class="ic">🔎</span>환승검색</button>
     <button data-tab="routes"><span class="ic">🧭</span>경로</button>
     <button data-tab="templates"><span class="ic">🕒</span>시간표</button>
-    <button data-tab="data"><span class="ic">💾</span>데이터</button>
+    <button data-tab="data"><span class="ic">🦴</span>데이터</button>
   </nav>
 
   <!-- 범용 모달 -->
@@ -48,6 +48,7 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="seed-data.js"></script>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

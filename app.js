@@ -17,6 +17,23 @@ const DOW = [
 const STORE_KEY = 'transit_tt_db_v1';
 const SCHEMA_VERSION = 1;
 
+// 오리지널 강아지 마스코트(직접 제작 — 특정 IP 비복제). 동글 하얀 말티즈 + 발그레 + 촉촉 눈망울.
+const MASCOT_SVG = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="28" cy="56" rx="17" ry="27" fill="#eceef6" stroke="#dcdeec" stroke-width="2"/>
+  <ellipse cx="92" cy="56" rx="17" ry="27" fill="#eceef6" stroke="#dcdeec" stroke-width="2"/>
+  <circle cx="60" cy="60" r="37" fill="#fff" stroke="#e6e8f2" stroke-width="2"/>
+  <ellipse cx="39" cy="70" rx="8.5" ry="5.5" fill="#ffc7d6"/>
+  <ellipse cx="81" cy="70" rx="8.5" ry="5.5" fill="#ffc7d6"/>
+  <ellipse cx="47" cy="58" rx="7" ry="9" fill="#403a58"/>
+  <ellipse cx="73" cy="58" rx="7" ry="9" fill="#403a58"/>
+  <circle cx="49.5" cy="54.5" r="2.4" fill="#fff"/>
+  <circle cx="75.5" cy="54.5" r="2.4" fill="#fff"/>
+  <circle cx="43.5" cy="69" r="2" fill="#bfe0ff"/>
+  <ellipse cx="60" cy="70" rx="5.5" ry="4.3" fill="#403a58"/>
+  <path d="M60 74 q-5 5 -10 1 M60 74 q5 5 10 1" stroke="#403a58" fill="none" stroke-width="2.2" stroke-linecap="round"/>
+</svg>`;
+const mascotBig = () => `<div class="mascot-big">${MASCOT_SVG}</div>`;
+
 // ────────────────────────────────────────────────────────────── 유틸
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -344,7 +361,9 @@ const searchState = { routeId: null, date: null, from: null, to: null };
 function renderSearch() {
   const el = $('#view-search');
   if (!DB.routes.length) {
-    el.innerHTML = `<div class="empty">아직 경로가 없습니다.<br><br>
+    el.innerHTML = `<div class="empty">${mascotBig()}
+      <div class="big-line">아직 경로가 없어요</div>
+      <div class="small">강아지랑 같이 길 찾으러 가볼까요?</div><br>
       <button class="btn primary" data-go="routes">🧭 경로 만들러 가기</button></div>`;
     el.querySelector('[data-go]').onclick = () => showTab('routes');
     return;
@@ -366,7 +385,7 @@ function renderSearch() {
       </div>
       <button class="btn primary block" id="s_go">🔎 환승 조회</button>
     </div>
-    <div id="s_results"></div>`;
+    <div id="s_results"><div class="empty small">${mascotBig()}<div class="big-line">어디로 갈까요? 🐾</div>날짜와 시간을 고르고 조회해 주세요</div></div>`;
 
   $('#s_route').onchange = (e) => { searchState.routeId = e.target.value; };
   $('#s_date').onchange = (e) => { searchState.date = e.target.value; };
@@ -384,8 +403,9 @@ function runSearch() {
   const { error, journeys, firstCount } = computeJourneys(route, date, from, to);
   if (error) { box.innerHTML = `<div class="errs">${esc(error)}</div>`; return; }
   if (!journeys.length) {
-    box.innerHTML = `<div class="empty">이 시간창에 운행하는 편을 못 찾았습니다.<br>
-      <span class="small">해당 날짜(${esc(date)})에 첫 구간 운행편 ${firstCount}개. 날짜·시간창·운행일 설정을 확인하세요.</span></div>`;
+    box.innerHTML = `<div class="empty">${mascotBig()}
+      <div class="big-line">이 시간엔 탈 게 없어요 🥺</div>
+      <span class="small">${esc(date)}에 첫 구간 운행편 ${firstCount}개. 시간창을 넓히거나 날짜를 확인해 주세요.</span></div>`;
     return;
   }
   const iso = isoDow(date), dn = DOW.find(d => d.v === iso).l;
@@ -424,11 +444,11 @@ function renderJourney(j) {
 let routeDraft = null;
 function renderRoutes() {
   const el = $('#view-routes');
-  el.innerHTML = `<div class="sp" style="margin-bottom:10px">
-      <h2 style="margin:0">경로</h2>
+  el.innerHTML = `<div class="sp" style="margin-bottom:12px">
+      <div class="view-title"><span class="mascot-mini">${MASCOT_SVG}</span><h2>경로</h2></div>
       <button class="btn primary sm" id="r_new">+ 새 경로</button>
     </div>
-    <div id="r_list">${DB.routes.length ? DB.routes.map(routeItem).join('') : `<div class="empty">등록된 경로가 없습니다.</div>`}</div>`;
+    <div id="r_list">${DB.routes.length ? DB.routes.map(routeItem).join('') : `<div class="empty">${mascotBig()}<div class="big-line">등록된 경로가 없어요</div>+ 새 경로로 만들어 주세요</div>`}</div>`;
   $('#r_new').onclick = () => openRouteEditor(null);
   $$('#r_list [data-edit]').forEach((b) => b.onclick = () => openRouteEditor(b.dataset.edit));
   $$('#r_list [data-clone]').forEach((b) => b.onclick = () => cloneRoute(b.dataset.clone));
@@ -585,12 +605,12 @@ function renderTemplates() {
     const kw = tplFilter.toLowerCase();
     return [t.name, t.lineName, t.origin, t.destination, t.transportType].some((f) => String(f || '').toLowerCase().includes(kw));
   });
-  el.innerHTML = `<div class="sp" style="margin-bottom:10px">
-      <h2 style="margin:0">시간표</h2>
+  el.innerHTML = `<div class="sp" style="margin-bottom:12px">
+      <div class="view-title"><span class="mascot-mini">${MASCOT_SVG}</span><h2>시간표</h2></div>
       <button class="btn primary sm" id="t_new">+ 새 시간표</button>
     </div>
-    <input id="t_filter" placeholder="검색(이름·노선·출발·도착)" value="${esc(tplFilter)}" style="margin-bottom:10px">
-    <div id="t_list">${list.length ? list.map(tplItem).join('') : `<div class="empty">시간표가 없습니다.</div>`}</div>`;
+    <input id="t_filter" placeholder="🔍 검색(이름·노선·출발·도착)" value="${esc(tplFilter)}" style="margin-bottom:12px">
+    <div id="t_list">${list.length ? list.map(tplItem).join('') : `<div class="empty">${mascotBig()}<div class="big-line">시간표가 없어요</div></div>`}</div>`;
   $('#t_new').onclick = () => openTemplateEditor(null);
   const f = $('#t_filter'); f.oninput = (e) => { tplFilter = e.target.value; const l = $('#t_list'); const ls = DB.templates.filter((t) => { const kw = tplFilter.toLowerCase(); return !tplFilter || [t.name, t.lineName, t.origin, t.destination, t.transportType].some((x) => String(x || '').toLowerCase().includes(kw)); }); l.innerHTML = ls.length ? ls.map(tplItem).join('') : `<div class="empty">결과 없음</div>`; bindTplItems(); };
   bindTplItems();
@@ -864,9 +884,9 @@ function renderData() {
       <textarea id="d_hol" placeholder="2026-01-01">${esc((DB.holidays || []).join('\n'))}</textarea>
       <button class="btn sm primary" id="d_holsave" style="margin-top:6px">공휴일 저장</button>
     </div>
-    <div class="card"><h3>기타</h3>
+    <div class="card"><h3>🦴 기타</h3>
       <div class="row wrap">
-        <button class="btn" id="d_seed">샘플 데이터 넣기</button>
+        <button class="btn" id="d_seed">기본(춘천) 데이터 다시 넣기</button>
         <button class="btn bad" id="d_clear">전체 삭제</button>
       </div>
       <div class="hint">시간표 ${DB.templates.length}개 · 경로 ${DB.routes.length}개 · 공휴일 ${DB.holidays.length}일</div>
@@ -879,7 +899,7 @@ function renderData() {
   $('#d_merge').onclick = () => importJSON(false);
   $('#d_replace').onclick = () => importJSON(true);
   $('#d_holsave').onclick = () => { DB.holidays = parseTimeList($('#d_hol').value).filter(isValidDate); saveDB(); toast(`공휴일 ${DB.holidays.length}일 저장`); renderData(); };
-  $('#d_seed').onclick = () => { seedSample(true); saveDB(); toast('샘플을 넣었습니다.'); renderData(); };
+  $('#d_seed').onclick = () => { if (!confirm('현재 데이터를 지우고 기본(춘천 통근) 데이터로 되돌릴까요?')) return; DB = emptyDB(); seedSample(true); saveDB(); toast('기본 데이터를 넣었어요 🐾'); renderData(); };
   $('#d_clear').onclick = () => { if (confirm('모든 데이터를 삭제할까요? 되돌릴 수 없습니다.')) { DB = emptyDB(); saveDB(); toast('전체 삭제'); renderData(); } };
 }
 function exportJSON() {
@@ -921,6 +941,14 @@ function seedIfFirstRun() {
 }
 function seedSample(force) {
   if (!force && (DB.templates.length || DB.routes.length)) return;
+  // 번들된 실데이터(오류동→춘천)가 있으면 그걸 기본값으로 사용
+  if (typeof window !== 'undefined' && window.SEED_DB) {
+    const s = JSON.parse(JSON.stringify(window.SEED_DB));
+    DB.templates = s.templates || [];
+    DB.routes = s.routes || [];
+    DB.holidays = s.holidays || [];
+    return;
+  }
   const t1 = {
     id: 'subway-line1-oryudong-yongsan-weekday', name: '1호선 오류동→용산 (평일)',
     transportType: '지하철', operator: '코레일', lineName: '1호선', direction: '용산 방면',
@@ -963,6 +991,7 @@ function seedSample(force) {
 // ────────────────────────────────────────────────────────────── 부트
 function boot() {
   loadDB();
+  const mm = $('#mascotMini'); if (mm) mm.innerHTML = MASCOT_SVG;
   $('#tabbar').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
   $('#modalBack').addEventListener('click', (e) => { if (e.target.id === 'modalBack') closeModal(); });
   $('#btnInstallHint').onclick = showInstallHint;

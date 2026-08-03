@@ -1,10 +1,11 @@
 /* 오프라인 캐시 서비스워커. 앱 셸(정적 파일)을 캐시-우선으로 제공. */
-const CACHE = 'transit-tt-v1';
+const CACHE = 'transit-tt-v2';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './seed-data.js',
   './manifest.webmanifest',
   './icons/icon-180.png',
   './icons/icon-192.png',
