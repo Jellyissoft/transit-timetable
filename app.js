@@ -17,6 +17,21 @@ const DOW = [
 const STORE_KEY = 'transit_tt_db_v1';
 const SCHEMA_VERSION = 1;
 
+// 2026년 대한민국 공휴일(대체공휴일 포함). '자동 채우기'용.
+const HOLIDAYS_2026 = [
+  '2026-01-01', // 신정
+  '2026-02-16', '2026-02-17', '2026-02-18', // 설날 연휴
+  '2026-03-01', '2026-03-02', // 삼일절 + 대체
+  '2026-05-05', // 어린이날
+  '2026-05-24', '2026-05-25', // 부처님오신날 + 대체
+  '2026-06-06', // 현충일
+  '2026-08-15', '2026-08-17', // 광복절 + 대체
+  '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-28', // 추석 연휴 + 대체
+  '2026-10-03', '2026-10-05', // 개천절 + 대체
+  '2026-10-09', // 한글날
+  '2026-12-25', // 성탄절
+];
+
 // 오리지널 강아지 마스코트(직접 제작 — 특정 IP 비복제). 동글 하얀 말티즈 + 발그레 + 촉촉 눈망울.
 const MASCOT_SVG = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
   <ellipse cx="28" cy="56" rx="17" ry="27" fill="#eceef6" stroke="#dcdeec" stroke-width="2"/>
@@ -242,7 +257,7 @@ function expandDepartures(t, dateStr) {
       out.push({ depMin, arrFromMid, tripId: null, label: fmtMin(depMin) });
     });
   } else if (t.scheduleType === 'trips') {
-    const iso = isoDow(dateStr);
+    const iso = isHoliday(dateStr) ? 7 : isoDow(dateStr); // 공휴일은 일요일(휴일)처럼 판정
     for (const tr of (t.trips || [])) {
       let runs = (tr.operatingDays || []).includes(iso);
       if ((tr.excludedDates || []).includes(dateStr)) runs = false;
@@ -879,10 +894,17 @@ function renderData() {
         <button class="btn bad" id="d_replace">전체 교체 복원</button>
       </div>
     </div>
-    <div class="card"><h3>공휴일</h3>
-      <p class="small muted">‘일요일·공휴일’ 운행일 판정에 쓰입니다. 줄단위 YYYY-MM-DD.</p>
-      <textarea id="d_hol" placeholder="2026-01-01">${esc((DB.holidays || []).join('\n'))}</textarea>
-      <button class="btn sm primary" id="d_holsave" style="margin-top:6px">공휴일 저장</button>
+    <div class="card"><h3>📅 공휴일</h3>
+      <p class="small muted">여기 등록한 날은 <b>휴일(주말) 시간표</b>로 조회돼요. 평일에 낀 빨간날도 챙깁니다.</p>
+      <div class="row" style="margin-bottom:8px">
+        <input type="date" id="d_holdate" class="grow">
+        <button class="btn sm primary" id="d_holadd">＋ 추가</button>
+      </div>
+      <div class="row wrap" style="margin-bottom:12px">
+        <button class="btn sm" id="d_hol2026">✨ 2026 공휴일 자동 채우기</button>
+        ${(DB.holidays || []).length ? `<button class="btn sm bad" id="d_holclear">모두 지우기</button>` : ''}
+      </div>
+      <div class="chips" id="d_holchips">${(DB.holidays || []).slice().sort().map((h) => `<span class="chip">${esc(h)} <span data-rmhol="${esc(h)}" style="cursor:pointer;font-weight:900">✕</span></span>`).join('') || '<span class="muted small">등록된 공휴일 없음</span>'}</div>
     </div>
     <div class="card"><h3>🦴 기타</h3>
       <div class="row wrap">
@@ -898,7 +920,11 @@ function renderData() {
   $('#d_file').onchange = (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#d_import').value = rd.result; toast('파일을 읽었습니다. 아래 버튼으로 가져오기'); }; rd.readAsText(f); };
   $('#d_merge').onclick = () => importJSON(false);
   $('#d_replace').onclick = () => importJSON(true);
-  $('#d_holsave').onclick = () => { DB.holidays = parseTimeList($('#d_hol').value).filter(isValidDate); saveDB(); toast(`공휴일 ${DB.holidays.length}일 저장`); renderData(); };
+  const addHol = (d) => { if (!isValidDate(d)) { toast('날짜를 확인하세요.'); return; } if (!DB.holidays.includes(d)) DB.holidays.push(d); saveDB(); renderData(); };
+  $('#d_holadd').onclick = () => addHol($('#d_holdate').value);
+  $('#d_hol2026').onclick = () => { const before = DB.holidays.length; DB.holidays = Array.from(new Set([...DB.holidays, ...HOLIDAYS_2026])); saveDB(); toast(`2026 공휴일 ${DB.holidays.length - before}일 추가`); renderData(); };
+  const clr = $('#d_holclear'); if (clr) clr.onclick = () => { if (confirm('등록된 공휴일을 모두 지울까요?')) { DB.holidays = []; saveDB(); renderData(); } };
+  $$('#d_holchips [data-rmhol]').forEach((x) => x.onclick = () => { DB.holidays = DB.holidays.filter((h) => h !== x.dataset.rmhol); saveDB(); renderData(); });
   $('#d_seed').onclick = () => { if (!confirm('현재 데이터를 지우고 기본(춘천 통근) 데이터로 되돌릴까요?')) return; DB = emptyDB(); seedSample(true); saveDB(); toast('기본 데이터를 넣었어요 🐾'); renderData(); };
   $('#d_clear').onclick = () => { if (confirm('모든 데이터를 삭제할까요? 되돌릴 수 없습니다.')) { DB = emptyDB(); saveDB(); toast('전체 삭제'); renderData(); } };
 }
