@@ -116,6 +116,14 @@ function loadDB() {
     DB.templates = DB.templates || [];
     DB.routes = DB.routes || [];
     DB.holidays = DB.holidays || [];
+    // 번들 시드가 갱신되면 경로·시간표를 최신으로 교체(공휴일은 보존)
+    if (window.SEED_DB && window.SEED_DB.seedVersion && DB.seededVersion !== window.SEED_DB.seedVersion) {
+      const s = JSON.parse(JSON.stringify(window.SEED_DB));
+      DB.templates = s.templates || [];
+      DB.routes = s.routes || [];
+      DB.seededVersion = s.seedVersion;
+      saveDB();
+    }
   } catch (e) {
     console.error('DB 로드 실패', e);
     DB = emptyDB();
@@ -1021,6 +1029,7 @@ function seedSample(force) {
     DB.templates = s.templates || [];
     DB.routes = s.routes || [];
     DB.holidays = s.holidays || [];
+    DB.seededVersion = s.seedVersion;
     return;
   }
   const t1 = {

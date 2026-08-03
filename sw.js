@@ -1,5 +1,5 @@
 /* 오프라인 캐시 서비스워커. 앱 셸(정적 파일)을 캐시-우선으로 제공. */
-const CACHE = 'transit-tt-v6';
+const CACHE = 'transit-tt-v7';
 const ASSETS = [
   './',
   './index.html',
