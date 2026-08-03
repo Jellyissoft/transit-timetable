@@ -381,6 +381,28 @@ function showTab(name) {
 
 // ────────────────────────────────────────────────────────────── 뷰: 환승 검색
 const searchState = { routeId: null, date: null, from: null, to: null };
+
+// 같은 방향의 여러 경로를 드롭다운에서 하나로 묶어 보여주고, 조회 시 둘 다 결과에 냄.
+const ROUTE_MERGES = [
+  { id: 'oryudong-chuncheon-all', name: '오류동→춘천', members: ['oryudong-chuncheon', 'oryudong-seoksa'] },
+];
+// 드롭다운에 실제로 보이는 항목들: {id, name, memberIds[]}
+function displayRoutes() {
+  const out = [], emitted = new Set();
+  for (const r of DB.routes) {
+    const g = ROUTE_MERGES.find((g) => g.members.includes(r.routeId));
+    if (g) {
+      if (!emitted.has(g.id)) {
+        const mem = g.members.filter((id) => DB.routes.some((x) => x.routeId === id));
+        out.push({ id: g.id, name: g.name, memberIds: mem });
+        emitted.add(g.id);
+      }
+      continue;
+    }
+    out.push({ id: r.routeId, name: r.routeName, memberIds: [r.routeId] });
+  }
+  return out;
+}
 function renderSearch() {
   const el = $('#view-search');
   if (!DB.routes.length) {
@@ -391,8 +413,9 @@ function renderSearch() {
     el.querySelector('[data-go]').onclick = () => showTab('routes');
     return;
   }
-  if (!searchState.routeId || !DB.routes.some(r => r.routeId === searchState.routeId))
-    searchState.routeId = DB.routes[0].routeId;
+  const drs = displayRoutes();
+  if (!searchState.routeId || !drs.some(r => r.id === searchState.routeId))
+    searchState.routeId = drs[0].id;
   if (!searchState.date) searchState.date = todayStr();
   if (searchState.from == null) { searchState.from = fmtMin(nowMin()); searchState.to = fmtMin(Math.min(nowMin() + 180, 1439)); }
 
@@ -401,7 +424,7 @@ function renderSearch() {
     <div class="card">
       <label class="field" style="margin-bottom:8px"><span>경로</span>
         <div class="row">
-          <select id="s_route" class="grow">${DB.routes.map(r => `<option value="${r.routeId}" ${r.routeId === searchState.routeId ? 'selected' : ''}>${esc(r.routeName)}</option>`).join('')}</select>
+          <select id="s_route" class="grow">${drs.map(r => `<option value="${r.id}" ${r.id === searchState.routeId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>
           ${swapId ? `<button class="btn sm" id="s_swap" title="방향 바꾸기" style="min-width:46px;font-size:18px">⇄</button>` : ''}
         </div>
       </label>
@@ -425,29 +448,39 @@ function renderSearch() {
   runSearch(); // ① 열자마자 자동 조회
 }
 
-// 방향 스왑 대상 경로(이름 "A→B" 파싱). 정확한 역방향 우선, 없으면 도착=내 출발 경로.
+// 방향 스왑 대상(병합 목록 기준). 이름 "A→B" 파싱, 역방향 우선.
 function swapRouteId(curId) {
-  const cur = DB.routes.find((r) => r.routeId === curId); if (!cur) return null;
+  const drs = displayRoutes();
+  const cur = drs.find((r) => r.id === curId); if (!cur) return null;
   const parse = (nm) => { const p = String(nm).split('→'); return { o: (p[0] || '').trim(), d: (p[1] || '').trim() }; };
-  const me = parse(cur.routeName);
-  let t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).o === me.d && parse(r.routeName).d === me.o);
-  if (!t) t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).o === me.d);
-  if (!t) t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).d === me.o);
-  return t ? t.routeId : null;
+  const me = parse(cur.name);
+  let t = drs.find((r) => r.id !== curId && parse(r.name).o === me.d && parse(r.name).d === me.o);
+  if (!t) t = drs.find((r) => r.id !== curId && parse(r.name).o === me.d);
+  if (!t) t = drs.find((r) => r.id !== curId && parse(r.name).d === me.o);
+  return t ? t.id : null;
 }
 
 let liveTimer = null;
 function runSearch() {
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
-  const route = DB.routes.find((r) => r.routeId === searchState.routeId);
   const box = $('#s_results');
   if (!box) return;
-  if (!route) { box.innerHTML = ''; return; }
+  const entry = displayRoutes().find((r) => r.id === searchState.routeId);
+  if (!entry) { box.innerHTML = ''; return; }
   const date = $('#s_date') ? $('#s_date').value : searchState.date;
   const from = parseTime(searchState.from), to = 1439; // '출발 시각 이후' 전부(끝 시각 제거)
   if (!isValidDate(date)) { box.innerHTML = `<div class="errs">날짜를 확인하세요.</div>`; return; }
-  const { error, journeys, firstCount } = computeJourneys(route, date, from, to);
-  if (error) { box.innerHTML = `<div class="errs">${esc(error)}</div>`; return; }
+  let all = [], firstCount = 0, anyOk = false, lastErr = null;
+  for (const rid of entry.memberIds) { // 병합 경로면 여러 경로를 합쳐 조회
+    const route = DB.routes.find((r) => r.routeId === rid);
+    if (!route) continue;
+    const res = computeJourneys(route, date, from, to, 6);
+    if (res.error) { lastErr = res.error; continue; }
+    anyOk = true; firstCount += res.firstCount || 0; all.push(...res.journeys);
+  }
+  if (!anyOk) { box.innerHTML = `<div class="errs">${esc(lastErr || '경로를 찾을 수 없습니다.')}</div>`; return; }
+  all.sort((a, b) => a.firstBoard - b.firstBoard);
+  const journeys = all.slice(0, 8);
   if (!journeys.length) {
     box.innerHTML = `<div class="empty">${mascotBig()}
       <div class="big-line">이 시간엔 탈 게 없어요 🥺</div>
