@@ -388,32 +388,57 @@ function renderSearch() {
   if (!searchState.date) searchState.date = todayStr();
   if (searchState.from == null) { searchState.from = fmtMin(nowMin()); searchState.to = fmtMin(Math.min(nowMin() + 180, 1439)); }
 
+  const swapId = swapRouteId(searchState.routeId);
   el.innerHTML = `
     <div class="card">
-      <label class="field"><span>경로</span>
-        <select id="s_route">${DB.routes.map(r => `<option value="${r.routeId}" ${r.routeId === searchState.routeId ? 'selected' : ''}>${esc(r.routeName)}</option>`).join('')}</select>
+      <label class="field" style="margin-bottom:8px"><span>경로</span>
+        <div class="row">
+          <select id="s_route" class="grow">${DB.routes.map(r => `<option value="${r.routeId}" ${r.routeId === searchState.routeId ? 'selected' : ''}>${esc(r.routeName)}</option>`).join('')}</select>
+          ${swapId ? `<button class="btn sm" id="s_swap" title="방향 바꾸기" style="min-width:46px;font-size:18px">⇄</button>` : ''}
+        </div>
       </label>
       <label class="field"><span>날짜</span><input type="date" id="s_date" value="${searchState.date}"></label>
       <div class="two">
         <label class="field"><span>출발 희망 시작</span><input type="time" id="s_from" value="${searchState.from}"></label>
         <label class="field"><span>출발 희망 끝</span><input type="time" id="s_to" value="${searchState.to}"></label>
       </div>
-      <button class="btn primary block" id="s_go">🔎 환승 조회</button>
+      <div class="row">
+        <button class="btn sm" id="s_now" title="지금 시각부터">🕑 지금</button>
+        <button class="btn primary grow" id="s_go">🔎 환승 조회</button>
+      </div>
     </div>
-    <div id="s_results"><div class="empty small">${mascotBig()}<div class="big-line">어디로 갈까요? 🐾</div>날짜와 시간을 고르고 조회해 주세요</div></div>`;
+    <div id="s_results"></div>`;
 
-  $('#s_route').onchange = (e) => { searchState.routeId = e.target.value; };
-  $('#s_date').onchange = (e) => { searchState.date = e.target.value; };
-  $('#s_from').onchange = (e) => { searchState.from = e.target.value; };
-  $('#s_to').onchange = (e) => { searchState.to = e.target.value; };
+  $('#s_route').onchange = (e) => { searchState.routeId = e.target.value; renderSearch(); };
+  $('#s_date').onchange = (e) => { searchState.date = e.target.value; runSearch(); };
+  $('#s_from').onchange = (e) => { searchState.from = e.target.value; runSearch(); };
+  $('#s_to').onchange = (e) => { searchState.to = e.target.value; runSearch(); };
   $('#s_go').onclick = runSearch;
+  $('#s_now').onclick = () => { searchState.date = todayStr(); searchState.from = fmtMin(nowMin()); searchState.to = fmtMin(Math.min(nowMin() + 180, 1439)); renderSearch(); };
+  const sw = $('#s_swap'); if (sw) sw.onclick = () => { const id = swapRouteId(searchState.routeId); if (id) { searchState.routeId = id; renderSearch(); } };
+  runSearch(); // ① 열자마자 자동 조회
 }
 
+// 방향 스왑 대상 경로(이름 "A→B" 파싱). 정확한 역방향 우선, 없으면 도착=내 출발 경로.
+function swapRouteId(curId) {
+  const cur = DB.routes.find((r) => r.routeId === curId); if (!cur) return null;
+  const parse = (nm) => { const p = String(nm).split('→'); return { o: (p[0] || '').trim(), d: (p[1] || '').trim() }; };
+  const me = parse(cur.routeName);
+  let t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).o === me.d && parse(r.routeName).d === me.o);
+  if (!t) t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).o === me.d);
+  if (!t) t = DB.routes.find((r) => r.routeId !== curId && parse(r.routeName).d === me.o);
+  return t ? t.routeId : null;
+}
+
+let liveTimer = null;
 function runSearch() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   const route = DB.routes.find((r) => r.routeId === searchState.routeId);
   const box = $('#s_results');
+  if (!box) return;
   if (!route) { box.innerHTML = ''; return; }
-  const date = $('#s_date').value, from = parseTime($('#s_from').value), to = parseTime($('#s_to').value);
+  const date = $('#s_date') ? $('#s_date').value : searchState.date;
+  const from = parseTime(searchState.from), to = parseTime(searchState.to);
   if (!isValidDate(date)) { box.innerHTML = `<div class="errs">날짜를 확인하세요.</div>`; return; }
   const { error, journeys, firstCount } = computeJourneys(route, date, from, to);
   if (error) { box.innerHTML = `<div class="errs">${esc(error)}</div>`; return; }
@@ -424,15 +449,40 @@ function runSearch() {
     return;
   }
   const iso = isoDow(date), dn = DOW.find(d => d.v === iso).l;
-  box.innerHTML = `<div class="small muted" style="margin:2px 4px 8px">${esc(date)} (${dn})${isHoliday(date) ? ' · 공휴일' : ''} · ${journeys.length}개 결과</div>` +
+  const j0 = journeys[0];
+  const isToday = date === todayStr();
+  const sameDay = Math.floor(j0.firstBoard / 1440) === 0;
+  let hero = '';
+  if (isToday && sameDay) {
+    const first = j0.legs[0];
+    const mins = j0.firstBoard - nowMin();
+    hero = `<div class="cd-hero">
+      <div class="cd-label">다음 출발 · ${esc(first.t.transportType)} ${esc(first.t.lineName || '')}</div>
+      <div class="cd-main"><span class="cd-time">${fmtMin(j0.firstBoard)}</span>
+        <span class="cd-badge"><span id="s_cd">${mins}</span>분 후</span></div>
+    </div>`;
+  }
+  box.innerHTML = hero +
+    `<div class="small muted" style="margin:2px 4px 8px">${esc(date)} (${dn})${isHoliday(date) ? ' · 공휴일' : ''} · ${journeys.length}개 결과</div>` +
     journeys.map((j) => renderJourney(j)).join('');
+
+  // ② 카운트다운 라이브 갱신
+  if (isToday && sameDay) {
+    liveTimer = setInterval(() => {
+      if (currentTab !== 'search') { clearInterval(liveTimer); liveTimer = null; return; }
+      const cd = document.getElementById('s_cd'); if (!cd) return;
+      const mins = j0.firstBoard - nowMin();
+      if (mins < 0) { searchState.from = fmtMin(nowMin()); runSearch(); return; } // 열차 지나감 → 다음 편
+      cd.textContent = mins;
+    }, 15000);
+  }
 }
 
 function renderJourney(j) {
-  const legsHtml = j.legs.map((l, i) => {
+  const legsHtml = j.legs.map((l) => {
     const t = l.t;
     const dep = absLabel(j.startDate, l.absDep);
-    const arr = l.arrAbs != null ? absLabel(j.startDate, l.arrAbs) : '—';
+    const arr = l.arrAbs != null ? absLabel(j.startDate, l.arrAbs) : '';
     const wait = l.waitBefore > 0 ? `<span class="wait">↕ 환승 대기 ${humanDur(l.waitBefore)}</span>` : '';
     const boardStop = l.seg.boardStop ? esc(l.seg.boardStop) : esc(t.origin || '');
     const alightStop = l.seg.alightStop ? esc(l.seg.alightStop) : esc(t.destination || '');
@@ -441,16 +491,14 @@ function renderJourney(j) {
       ${wait}
       <div class="sp"><div><span class="badge tag-mode">${esc(t.transportType)}</span> <b>${esc(t.lineName || t.name)}</b>${trip}</div></div>
       <div class="small muted">${boardStop} → ${alightStop}${t.direction ? ' · ' + esc(t.direction) : ''}</div>
-      <div class="time">${dep} <span class="muted">→</span> ${arr}</div>
+      <div class="time">${dep}${arr ? ` <span class="muted">→</span> ${arr}` : ''}</div>
     </div>`;
   }).join('');
   return `<div class="card">
-    <div class="hdr-metrics">
-      <div class="metric"><div class="k">출발</div><div class="v">${absLabel(j.startDate, j.firstBoard)}</div></div>
-      <div class="metric"><div class="k">도착</div><div class="v">${absLabel(j.startDate, j.lastArr)}</div></div>
-      <div class="metric"><div class="k">총 소요</div><div class="v">${humanDur(j.totalDuration)}</div></div>
+    <div class="sp" style="margin-bottom:8px">
+      <div style="font-weight:800">🕑 <span style="font-variant-numeric:tabular-nums">${absLabel(j.startDate, j.firstBoard)}</span> 출발</div>
+      <span class="badge">환승 ${j.legs.length - 1}회</span>
     </div>
-    <div class="small muted" style="margin:2px 2px 8px">환승 대기 합계 ${humanDur(j.totalWait)} · 환승 ${j.legs.length - 1}회</div>
     <div class="result">${legsHtml}</div>
   </div>`;
 }

@@ -196,6 +196,18 @@ textarea { min-height: 96px; resize: vertical; font-variant-numeric: tabular-num
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
 
+/* 다음 열차 카운트다운 히어로 */
+.cd-hero {
+  background: linear-gradient(120deg, #6fb0ff, #7c8cff);
+  color: #fff; border-radius: var(--radius); padding: 16px 18px; margin-bottom: 12px;
+  box-shadow: 0 8px 22px rgba(90, 130, 240, .35);
+}
+.cd-label { font-size: 12.5px; font-weight: 700; opacity: .92; }
+.cd-main { display: flex; align-items: baseline; gap: 12px; margin-top: 4px; }
+.cd-time { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.cd-badge { background: rgba(255,255,255,.24); border-radius: 999px; padding: 5px 13px; font-size: 15px; font-weight: 800; }
+.cd-badge #s_cd { font-variant-numeric: tabular-nums; }
+
 /* 빈 화면 + 마스코트 */
 .empty { text-align: center; color: var(--muted); padding: 22px 12px 30px; }
 .empty .mascot-big { width: 130px; height: 130px; margin: 0 auto 8px; }
