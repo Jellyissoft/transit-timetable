@@ -405,10 +405,9 @@ function renderSearch() {
           ${swapId ? `<button class="btn sm" id="s_swap" title="방향 바꾸기" style="min-width:46px;font-size:18px">⇄</button>` : ''}
         </div>
       </label>
-      <label class="field"><span>날짜</span><input type="date" id="s_date" value="${searchState.date}"></label>
       <div class="two">
-        <label class="field"><span>출발 희망 시작</span><input type="time" id="s_from" value="${searchState.from}"></label>
-        <label class="field"><span>출발 희망 끝</span><input type="time" id="s_to" value="${searchState.to}"></label>
+        <label class="field"><span>날짜</span><input type="date" id="s_date" value="${searchState.date}"></label>
+        <label class="field"><span>출발 시각 (이후)</span><input type="time" id="s_from" value="${searchState.from}"></label>
       </div>
       <div class="row">
         <button class="btn sm" id="s_now" title="지금 시각부터">🕑 지금</button>
@@ -420,9 +419,8 @@ function renderSearch() {
   $('#s_route').onchange = (e) => { searchState.routeId = e.target.value; renderSearch(); };
   $('#s_date').onchange = (e) => { searchState.date = e.target.value; runSearch(); };
   $('#s_from').onchange = (e) => { searchState.from = e.target.value; runSearch(); };
-  $('#s_to').onchange = (e) => { searchState.to = e.target.value; runSearch(); };
   $('#s_go').onclick = runSearch;
-  $('#s_now').onclick = () => { searchState.date = todayStr(); searchState.from = fmtMin(nowMin()); searchState.to = fmtMin(Math.min(nowMin() + 180, 1439)); renderSearch(); };
+  $('#s_now').onclick = () => { searchState.date = todayStr(); searchState.from = fmtMin(nowMin()); renderSearch(); };
   const sw = $('#s_swap'); if (sw) sw.onclick = () => { const id = swapRouteId(searchState.routeId); if (id) { searchState.routeId = id; renderSearch(); } };
   runSearch(); // ① 열자마자 자동 조회
 }
@@ -446,7 +444,7 @@ function runSearch() {
   if (!box) return;
   if (!route) { box.innerHTML = ''; return; }
   const date = $('#s_date') ? $('#s_date').value : searchState.date;
-  const from = parseTime(searchState.from), to = parseTime(searchState.to);
+  const from = parseTime(searchState.from), to = 1439; // '출발 시각 이후' 전부(끝 시각 제거)
   if (!isValidDate(date)) { box.innerHTML = `<div class="errs">날짜를 확인하세요.</div>`; return; }
   const { error, journeys, firstCount } = computeJourneys(route, date, from, to);
   if (error) { box.innerHTML = `<div class="errs">${esc(error)}</div>`; return; }
