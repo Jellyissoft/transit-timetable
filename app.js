@@ -474,31 +474,33 @@ function runSearch() {
   for (const rid of entry.memberIds) { // 병합 경로면 여러 경로를 합쳐 조회
     const route = DB.routes.find((r) => r.routeId === rid);
     if (!route) continue;
-    const res = computeJourneys(route, date, from, to, 6);
+    const res = computeJourneys(route, date, from, to, 400); // 하루치 전부 계산 후 열차별로 묶음
     if (res.error) { lastErr = res.error; continue; }
     anyOk = true; firstCount += res.firstCount || 0; all.push(...res.journeys);
   }
   if (!anyOk) { box.innerHTML = `<div class="errs">${esc(lastErr || '경로를 찾을 수 없습니다.')}</div>`; return; }
-  all.sort((a, b) => a.firstBoard - b.firstBoard);
-  const journeys = all.slice(0, 8);
+  const journeys = groupJourneys(all).slice(0, 6);
   if (!journeys.length) {
     box.innerHTML = `<div class="empty">${mascotBig()}
       <div class="big-line">이 시간엔 탈 게 없어요 🥺</div>
-      <span class="small">${esc(date)}에 첫 구간 운행편 ${firstCount}개. 시간창을 넓히거나 날짜를 확인해 주세요.</span></div>`;
+      <span class="small">${esc(date)}에 첫 구간 운행편 ${firstCount}개. 출발 시각을 앞당기거나 날짜를 확인해 주세요.</span></div>`;
     return;
   }
   const iso = isoDow(date), dn = DOW.find(d => d.v === iso).l;
   const j0 = journeys[0];
   const isToday = date === todayStr();
   const sameDay = Math.floor(j0.firstBoard / 1440) === 0;
+  const cdText = (m) => (m <= 0 ? '지금 출발' : `${m}분 후`);
   let hero = '';
   if (isToday && sameDay) {
-    const first = j0.legs[0];
-    const mins = j0.firstBoard - nowMin();
+    const first = j0.legs[0], main = j0.legs[1]; // main: 갈아탈 열차(ITX 등)
+    const label = main
+      ? `${esc(main.t.lineName || main.t.name)} ${fmtMin(main.absDep)} 타려면 · ${esc(first.t.lineName || first.t.name)} 늦어도`
+      : `다음 출발 · ${esc(first.t.transportType)} ${esc(first.t.lineName || '')}`;
     hero = `<div class="cd-hero">
-      <div class="cd-label">다음 출발 · ${esc(first.t.transportType)} ${esc(first.t.lineName || '')}</div>
+      <div class="cd-label">${label}</div>
       <div class="cd-main"><span class="cd-time">${fmtMin(j0.firstBoard)}</span>
-        <span class="cd-badge"><span id="s_cd">${mins}</span>분 후</span></div>
+        <span class="cd-badge"><span id="s_cd">${cdText(j0.firstBoard - nowMin())}</span></span></div>
     </div>`;
   }
   box.innerHTML = hero +
@@ -512,25 +514,58 @@ function runSearch() {
       const cd = document.getElementById('s_cd'); if (!cd) return;
       const mins = j0.firstBoard - nowMin();
       if (mins < 0) { searchState.from = fmtMin(nowMin()); runSearch(); return; } // 열차 지나감 → 다음 편
-      cd.textContent = mins;
+      cd.textContent = cdText(mins);
     }, 15000);
   }
 }
 
+// 같은 열차로 이어지는 여정을 카드 하나로 묶음.
+// ① 이후 구간이 같으면 가장 늦게 출발하는 첫 구간만 남기고, 더 이른 출발은 alts(절대분)로
+// ② 마지막 구간만 다른 여정(병합 경로의 버스 여러 개)은 lastOpts로 합침
+const legKey = (l) => `${l.t.id}@${l.absDep}`;
+function groupJourneys(all) {
+  const keyOf = (legs) => legs.map(legKey).join('|');
+  const byTail = new Map();
+  for (const j of all) {
+    const k = keyOf(j.legs.length > 1 ? j.legs.slice(1) : j.legs);
+    const cur = byTail.get(k);
+    if (!cur || j.firstBoard > cur.firstBoard) byTail.set(k, { ...j, alts: cur ? [...cur.alts, cur.firstBoard] : [] });
+    else cur.alts.push(j.firstBoard);
+  }
+  const byHead = new Map();
+  for (const j of byTail.values()) {
+    const k = keyOf(j.legs.length > 1 ? j.legs.slice(0, -1) : j.legs);
+    const g = byHead.get(k), last = j.legs[j.legs.length - 1];
+    if (!g) byHead.set(k, { ...j, lastOpts: [last] });
+    else { g.lastOpts.push(last); g.alts.push(...j.alts); }
+  }
+  return [...byHead.values()].map((g) => {
+    g.alts = [...new Set(g.alts)].sort((a, b) => a - b);
+    g.lastOpts.sort((a, b) => a.absDep - b.absDep);
+    return g;
+  }).sort((a, b) => a.firstBoard - b.firstBoard);
+}
+
 function renderJourney(j) {
-  const legsHtml = j.legs.map((l) => {
+  const opts = j.lastOpts || [j.legs[j.legs.length - 1]];
+  const legs = j.legs.length > 1 ? [...j.legs.slice(0, -1), ...opts] : j.legs;
+  const firstOpt = legs.length - opts.length;
+  const legsHtml = legs.map((l, i) => {
     const t = l.t;
     const dep = absLabel(j.startDate, l.absDep);
     const arr = l.arrAbs != null ? absLabel(j.startDate, l.arrAbs) : '';
+    const or = i > firstOpt ? `<div class="or">또는</div>` : '';
     const wait = l.waitBefore > 0 ? `<span class="wait">↕ 환승 대기 ${humanDur(l.waitBefore)}</span>` : '';
-    const boardStop = l.seg.boardStop ? esc(l.seg.boardStop) : esc(t.origin || '');
-    const alightStop = l.seg.alightStop ? esc(l.seg.alightStop) : esc(t.destination || '');
+    const stops = [l.seg.boardStop || t.origin, l.seg.alightStop || t.destination].filter(Boolean).map(esc).join(' → ');
     const trip = l.tripId ? ` <span class="badge">${esc(l.tripId)}</span>` : '';
+    const alts = i === 0 && j.alts && j.alts.length
+      ? `<div class="small muted">더 일찍 타도 같은 열차: ${j.alts.slice(-3).map((a) => absLabel(j.startDate, a)).join(' · ')}</div>` : '';
     return `<div class="leg">
-      ${wait}
+      ${or}${wait}
       <div class="sp"><div><span class="badge tag-mode">${esc(t.transportType)}</span> <b>${esc(t.lineName || t.name)}</b>${trip}</div></div>
-      <div class="small muted">${boardStop} → ${alightStop}${t.direction ? ' · ' + esc(t.direction) : ''}</div>
+      <div class="small muted">${stops}${t.direction ? ' · ' + esc(t.direction) : ''}</div>
       <div class="time">${dep}${arr ? ` <span class="muted">→</span> ${arr}` : ''}</div>
+      ${alts}
     </div>`;
   }).join('');
   return `<div class="card">

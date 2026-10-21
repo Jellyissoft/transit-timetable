@@ -1,5 +1,5 @@
 /* 오프라인 캐시 서비스워커. 앱 셸(정적 파일)을 캐시-우선으로 제공. */
-const CACHE = 'transit-tt-v10';
+const CACHE = 'transit-tt-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -14,7 +14,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache:'reload' — 브라우저 HTTP 캐시를 건너뛰어, 배포 직후에도 옛 파일이 박제되지 않게
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
