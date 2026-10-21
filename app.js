@@ -121,6 +121,7 @@ function loadDB() {
       const s = JSON.parse(JSON.stringify(window.SEED_DB));
       DB.templates = s.templates || [];
       DB.routes = s.routes || [];
+      DB.holidays = [...new Set([...DB.holidays, ...(s.holidays || [])])].sort(); // 번들 공휴일은 합치기(직접 등록분 보존)
       DB.seededVersion = s.seedVersion;
       saveDB();
     }
@@ -344,7 +345,11 @@ function buildJourney(segs, startDate, firstDep) {
       if (prevArrAbs == null) return null; // 이전 구간 도착 불명 → 연결 불가
       const readyAbs = prevArrAbs + buffer;
       const nx = findNextDeparture(t, startDate, readyAbs);
-      if (!nx) return null;
+      if (!nx) {
+        // 마지막 구간(버스 등)만 끊기면 앞 구간은 살리고 '운행 끝'으로 표시
+        if (i === segs.length - 1) { legs.push({ seg, t, missing: true, absDep: null, arrAbs: null, tripId: null, waitBefore: 0 }); break; }
+        return null;
+      }
       absDep = nx.absDep; arrAbs = nx.arrAbs; tripId = nx.tripId;
     }
     // 중간 구간인데 도착 불명이면 다음 연결 불가
@@ -353,10 +358,11 @@ function buildJourney(segs, startDate, firstDep) {
     legs.push({ seg, t, absDep, arrAbs, tripId, waitBefore });
     prevArrAbs = arrAbs != null ? arrAbs : absDep;
   }
+  const done = legs.filter((l) => !l.missing), end = done[done.length - 1];
   const firstBoard = legs[0].absDep;
-  const lastArr = legs[legs.length - 1].arrAbs != null ? legs[legs.length - 1].arrAbs : legs[legs.length - 1].absDep;
-  const totalWait = legs.reduce((s, l) => s + (l.waitBefore || 0), 0);
-  const rideTime = legs.reduce((s, l) => s + (l.arrAbs != null ? (l.arrAbs - l.absDep) : 0), 0);
+  const lastArr = end.arrAbs != null ? end.arrAbs : end.absDep;
+  const totalWait = done.reduce((s, l) => s + (l.waitBefore || 0), 0);
+  const rideTime = done.reduce((s, l) => s + (l.arrAbs != null ? (l.arrAbs - l.absDep) : 0), 0);
   return { legs, firstBoard, lastArr, totalDuration: lastArr - firstBoard, totalWait, rideTime, startDate };
 }
 
@@ -490,10 +496,10 @@ function runSearch() {
   const j0 = journeys[0];
   const isToday = date === todayStr();
   const sameDay = Math.floor(j0.firstBoard / 1440) === 0;
-  const cdText = (m) => (m <= 0 ? '지금 출발' : `${m}분 후`);
+  const cdText = (m) => (m <= 0 ? '지금 출발' : `${humanDur(m)} 후`);
   let hero = '';
   if (isToday && sameDay) {
-    const first = j0.legs[0], main = j0.legs[1]; // main: 갈아탈 열차(ITX 등)
+    const first = j0.legs[0], main = j0.legs[1] && !j0.legs[1].missing ? j0.legs[1] : null; // main: 갈아탈 열차(ITX 등)
     const label = main
       ? `${esc(main.t.lineName || main.t.name)} ${fmtMin(main.absDep)} 타려면 · ${esc(first.t.lineName || first.t.name)} 늦어도`
       : `다음 출발 · ${esc(first.t.transportType)} ${esc(first.t.lineName || '')}`;
@@ -541,6 +547,9 @@ function groupJourneys(all) {
   }
   return [...byHead.values()].map((g) => {
     g.alts = [...new Set(g.alts)].sort((a, b) => a - b);
+    // 탈 수 있는 마지막 구간이 하나라도 있으면 끊긴 것은 숨기고, 전부 끊겼으면 한 줄로 합침
+    const ok = g.lastOpts.filter((l) => !l.missing);
+    g.lastOpts = ok.length ? ok : [{ ...g.lastOpts[0], names: [...new Set(g.lastOpts.map((l) => l.t.lineName || l.t.name))] }];
     g.lastOpts.sort((a, b) => a.absDep - b.absDep);
     return g;
   }).sort((a, b) => a.firstBoard - b.firstBoard);
@@ -552,6 +561,10 @@ function renderJourney(j) {
   const firstOpt = legs.length - opts.length;
   const legsHtml = legs.map((l, i) => {
     const t = l.t;
+    if (l.missing) return `<div class="leg">
+      <span class="wait">✕ 이어지는 ${esc(t.transportType)} 운행 끝</span>
+      <div class="small muted">${esc((l.names || [t.lineName || t.name]).join(' · '))} 막차가 지났어요 · 택시 등 이용</div>
+    </div>`;
     const dep = absLabel(j.startDate, l.absDep);
     const arr = l.arrAbs != null ? absLabel(j.startDate, l.arrAbs) : '';
     const or = i > firstOpt ? `<div class="or">또는</div>` : '';
